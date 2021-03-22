@@ -59,7 +59,7 @@ glimpse(get_timeline(user="nytimes", n=10))
 Choose a list of few hundred Twitter users and get its id. You can find some list examples at https://docs.google.com/spreadsheets/d/1tcNy1q_eQH3HXGt-0hkmSNEGbcOUiC5si3kZ6-F0pB8/
 With this chunk you will get the user information of the list, including user names and counts of followers and tweets.
 ```{r userlist}
-users <- lists_members(list_id = #Your list ID
+users <- lists_members(list_id = 984765033673646080
                          )
 head(users)
 ```
@@ -67,33 +67,36 @@ head(users)
 From those users we are interested on those who have written at least 100 tweets and that have at least 100 followers. From the remaining set sample 100 at random. Give it a try with dplyr:
 ```{r cleanuserlist}
 library(dplyr)
-# Your Code Here
+users_filtered <- filter(users, followers_count >= 100 & statuses_count >= 100) 
 ```
 
 **2.2 Downloading timelines**
 
 As a test, we are going to get the last 200 tweets of the first user in our list. By setting include_rts to FALSE we will only get the original tweets among those 200,
 ```{r onetimeline}
-timeline <- get_timeline(user=users$user_id[1], n=200, include_rts = F)
+timeline <- get_timeline(user=users_filtered$user_id[1], n=200, include_rts = F)
 head(timeline)
 ```
 
 Your turn: look up the documentation of rtweet and look for a function that allows you to get the timeline of a list of users. Then do the same as above but for all the users in your dataset, retrieving their last 200 tweets and only taking original tweets out of them. **Make sure you save the data correctly or you might have to wait a long time to make this request again**. In case you go above the limit, you can use the file "usersdf.RData" file to continue the exercise. Check the appendix to apply for a developer account and authenticate requests, you will have much higher limits and shorter waiting times in that case.
 ```{r alltimelines}
-#Your code here
+timelines <- get_timelines(user = users_filtered$user_id, n = 200, include_rts = F)
+head(timelines)
 ```
 
 **2.3 Aggregating and arranging data**
 
 Now on the result, we want to calculate the mean number of tweets of each user. Here group_by and summarise from dplyr will be helpful. Save the result in a data frame called RTdf and name the column with the mean number of retweets as mnRT.
 ```{r aggregate}
-#Your code here
+RTdf <- timelines %>%
+  group_by(user_id) %>%
+    summarise(mnRT = mean(retweet_count, na.rm = T))
 ```
 
 And now we select the columns we want from the user data frame and merge it with our timeline analysis to have the data frame with the data we need to test social impact theory: the number of followers (audience size) and the mean number of retweets (social impact).
 ```{r join}
 users %>% select(user_id, followers_count, screen_name) -> usersdf
-usersdf <- inner_join(usersdf, RTdf)
+usersdf <- inner_join(usersdf, RTdf, by = "user_id")
 ```
 
 # 3. Visualize distributions and scatter plots
@@ -103,22 +106,31 @@ usersdf <- inner_join(usersdf, RTdf)
 Plot the histogram of the number of followers of users in your dataset, and the histogram of the logarithm of the number of followers. Which one is more skewed?
 ```{r FollowersHist}
 #load("usersdf.RData")  #in case you could not get data above, this file has 100 random US congress members
-#Your code here
+hist(usersdf$followers_count)
+hist(log(usersdf$followers_count))
+
 ```
+
+The linear plot is clearly more skewed towards users with less followers
 
 **3.2 Distribution of social impact**
 
 Repeat the above point but for the social impact of your users, also computing the logarithm. Which one is more skewed?
 ```{r SIHist}
-#Your code here
+hist(usersdf$mnRT)
+hist(log(usersdf$mnRT))
 ```
+
+Again, more skew towards a low number of RTs for the linear plot.
 
 **3.3 Number of followers vs social impact**
 
 Make a scatter plot with the logarithm of the number of followers of users on the horizontal axis and the logarithm of social impact on the vertical axis. Do you guess that there is a relationship?
 ```{r ScatterPlot}
-#Your code here
+plot(log(usersdf$followers_count), log(usersdf$mnRT))
 ```
+
+There seems to be a slight increasing trend, but it is very hard to quantify it from the scattered plot
 
 # 4. Fit and visualize a regression model
 
@@ -129,20 +141,26 @@ Make two new columns on the users data frame, one called SI with the logarithm o
 usersdf$SI <- log(usersdf$mnRT)
 usersdf$FC <- log(usersdf$followers_count)
 
-#Your code here
+model <- lm(SI~FC, usersdf)
 ```
 
 Print the values of the coefficient estimates of the model. Do these values support or contradict Social Impact Theory?
 ```{r modelCoefficients}
-#Your code here
+print(model)
+originalCoeff2 = model$coefficients[2]
 ```
+
+The value supports SIT (I prop to N^t, with 0<t<1)
 
 **4.2 Plot fit result**
 
 Plot the same scatter plot as in 3.3. Then use the abline function to draw a line of top with the intercept being the first coefficient of the model, and the slope as the second coefficient of the model. How good does it look?
 ```{r ModelPlot}
-#Your code here
+plot(log(usersdf$followers_count), log(usersdf$mnRT), xlab = "FC(log)", ylab = "SI(log)")
+abline(model$coefficients[1], model$coefficients[2], col="red")
 ```
+
+There seems to be a lot of residuals. The positive trend seems to be there, but there will be a lot of variance.
 
 **4.3 Calculate quality of the fit**
 
@@ -155,6 +173,7 @@ var(usersdf$SI)
 1-var(residuals)/var(usersdf$SI)
 ```
 
+The variance of the residuals is lower, and R2 is 0.19. This indicates a pretty bad fit ( 19% of variance is fitted through the model)
 
 **3.4 Distribution of residuals**
 
@@ -162,6 +181,8 @@ Plot the histogram of residuals. Do they look normally distributted?
 ```{r residualsHist}
 hist(residuals)
 ```
+
+It seems more skewed towards negative residuals.
 
 # 5. Bootstrapping
 
@@ -179,11 +200,12 @@ bootmodel
 
 Repeat the bootstrap sample fit of the previous point 10000 times and save the values of the second coefficient in a vector.
 ```{r shuf10000}
-bootVs <- rep(0, 10000)
-for (i in seq(1,10000))
-{
-  # Your code here
-} # How can you do this with the boot() function?
+library(boot)
+returnCoeff2 <- function(datav, sampleindices){
+  d <- lm(datav$SI[sampleindices] ~ datav$FC[sampleindices]);
+  return (d$coefficients[2])
+}
+results <- boot(data = usersdf, statistic = returnCoeff2, R = 10000)
 ```
 
 
@@ -192,16 +214,24 @@ for (i in seq(1,10000))
 Plot a histogram of the values resulting from the permutations and a vertical line on the value of the second coefficient of the original data. Use the xlim parameter of hist to make sure that both the histogram and the line can be plotted. How far is the line from the center of the histogram?
 
 ```{r shuf10000hist}
-# Your code here
+hist(results$t)
+abline(v = originalCoeff2, col = "red")
 ```
 
+The original value seems very close to the mean of the histogram. This means that the analysis is probably unbiased, but there seems to be quite a bit of variance. Thus changing our sample size might significantly vary the results.
 
 # Conclusions
 
 1. Do you find any relationship between social impact and the amount of followers?
 
+  There is a positive trend. On average SI = FC^0.43
+
 2. How sure are you that it is larger than zero? How sure are you that it is lower than 1?
+  After the bootstrap analysis 100% of the results lie in the [0.1,0.7] interval. On the other side, the residuals of the model were quite large. 
+  Overall we can be sure that it is in the stated range.
 
 3. Is the value of the relationship within the ranges predicted by Social Impact Theory?
-
+  It is. 0<t<1
 4. Under that relationship, if I have 1000 followers, how many more followers do I need to double my social impact?
+
+ 2*SI = (FC*2^(1/0.43))^0.43, so new FC ~ 5000, so roughly 4000 more followers
