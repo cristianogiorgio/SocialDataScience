@@ -60,6 +60,7 @@ get_vader("This book is not bad")
 The vader package also includes a vader_df() function to run VADER over a series of texts and produce results in a data frame. Here we use the schrute library to load the scripts of the US TV series "The Office" and run VADER over the first six lines of the series:
 
 ```{r}
+install.packages("schrute")
 library(schrute)
 texts <- head(theoffice$text)
 vader_df(texts)
@@ -187,6 +188,7 @@ You can learn more about tidytext at https://www.tidytextmining.com/
 You can run yourself any dictionary method through tidytext as long as you have a file with the words and their scores or sentiment classifications. tidytext includes three sentiment lexica with three different kind of annotations. You can get the annotations of each word with the get_sentiments() function. When running the lines below, you will have to say "yes" to download the data files:
 
 ```{r}
+install.packages("textdata")
 get_sentiments("afinn")
 ```
 

@@ -35,7 +35,8 @@ library(vader)
 
 Read the two .csv files into two data frames (twitterdf, youtubedf). Set the stringsAsFactors parameter to FALSE so the texts do not get converted into factors.
 ```{r}
-#Your code here
+twitterdf <- read.csv("Twitter-Sentiment.csv", header = T, sep = ",")
+youtubedf <- read.csv("YouTubeComments-Sentiment.csv", header = T, sep = ",")
 ```
 
 # 2. Run VADER over evaluation texts
@@ -44,16 +45,21 @@ Read the two .csv files into two data frames (twitterdf, youtubedf). Set the str
 
 Use the get_vader function over the text of the first tweet. Look at the text and the output of VADER. Does it look like a good classification?
 ```{r}
-#Your code here
+twitterdf$text[1]
+get_vader(twitterdf$text[1])
 ```
+
+It classifies "mean" as a positive word only. This does not look like a correct classification.
 
 **2.2 Run VADER over each text**
 
 Run VADER over each text (for Twitter and Youtube) and save the compound result in a column of each data frame. If this process is very slow in your computer, you can use the precomputed values of the VADER column of the provided file.
 ```{r, eval=F}
+twitterdf$VADERpre = twitterdf$VADER
 twitterVADER <- vader_df(twitterdf$text)
 twitterdf$VADER <- twitterVADER$compound
 
+youtubedf$VADERpre = youtubedf$VADER
 youtubeVADER <- vader_df(youtubedf$text)
 youtubedf$VADER <- youtubeVADER$compound
 ```
@@ -64,11 +70,12 @@ Convert the compound score into classes by using -0.5 and 0.5 as thresholds. In 
 
 ```{r}
 twitterdf$VADERclass <- "Neutral"
-twitterdf$VADERclass[twitterdf$VADER< -0.5] <- "Negative"
-twitterdf$VADERclass[twitterdf$VADER> 0.5] <- "Positive"
+twitterdf$VADERclass[twitterdf$VADER < -0.5] <- "Negative"
+twitterdf$VADERclass[twitterdf$VADER > 0.5] <- "Positive"
+
 youtubedf$VADERclass <- "Neutral"
-youtubedf$VADERclass[youtubedf$VADER< -0.5] <- "Negative"
-youtubedf$VADERclass[youtubedf$VADER> 0.5] <- "Positive"
+youtubedf$VADERclass[youtubedf$VADER < -0.5] <- "Negative"
+youtubedf$VADERclass[youtubedf$VADER > 0.5] <- "Positive"
 ```
 
 # 3. Run syuzhet over evaluation texts
@@ -78,11 +85,13 @@ youtubedf$VADERclass[youtubedf$VADER> 0.5] <- "Positive"
 Run the get_sentiment function of syuzhet over the first 5 examples of tweets. Print the text, the result of syuzhet, and the annotations of each text.
 
 ```{r, warning=FALSE, message=FALSE}
-for (i in seq(1,5))
-{
+for(i in seq(1,5)){
   text <- as.character(twitterdf$text[i])
-  #Your code here
+  print(text)
+  print(get_sentiment(text))
+  print(twitterdf$label[i])
 }
+
 ```
 
 
@@ -91,7 +100,11 @@ for (i in seq(1,5))
 For each text in the Twitter and YouTube datasets, run the get_sentiment function of syuzhet. You can use get_sentiment for the whole column of texts to get a new column of sentiment values without coding a loop. It's very fast!
 
 ```{r, eval=TRUE, warning=FALSE}
-#Your code here
+twittertextdf <- twitterdf$text
+twitterdf$Syuzhet <- get_sentiment(twittertextdf)
+
+youtubetextdf <- youtubedf$text
+youtubedf$Syuzhet <- get_sentiment(youtubetextdf)
 ```
 
 
@@ -100,7 +113,13 @@ For each text in the Twitter and YouTube datasets, run the get_sentiment functio
 As with VADER, compute classes from Syuzhet using -0.5 and 0.5 as thresholds.
 
 ```{r}
-#Your code here
+twitterdf$SYUZHETclass <- "Neutral"
+twitterdf$SYUZHETclass[twitterdf$Syuzhet < -0.5] <- "Negative"
+twitterdf$SYUZHETclass[twitterdf$Syuzhet > 0.5] <- "Positive"
+
+youtubedf$SYUZHETclass <- "Neutral"
+youtubedf$SYUZHETclass[youtubedf$Syuzhet < -0.5] <- "Negative"
+youtubedf$SYUZHETclass[youtubedf$Syuzhet > 0.5] <- "Positive"
 ```
 
 # 4. Evaluate against sentiment annotations and compare with Google NLP
@@ -110,7 +129,13 @@ As with VADER, compute classes from Syuzhet using -0.5 and 0.5 as thresholds.
 As with VADER and Syuzhet, compute classes from GoogleNLP using -0.3 and 0.3 as thresholds.
 
 ```{r}
-#Your code here
+twitterdf$NLPclass <- "Neutral"
+twitterdf$NLPclass[twitterdf$googleScore < -0.3] <- "Negative"
+  twitterdf$NLPclass[twitterdf$googleScore > 0.3] <- "Positive"
+
+youtubedf$NLPclass <- "Neutral"
+youtubedf$NLPclass[youtubedf$googleScore < -0.3] <- "Negative"
+youtubedf$NLPclass[youtubedf$googleScore > 0.3] <- "Positive"
 ```
 
 **4.2 Evaluate on Twitter**
@@ -118,58 +143,122 @@ As with VADER and Syuzhet, compute classes from GoogleNLP using -0.3 and 0.3 as 
 First, let's calculate the accuracy for all three classifiers on twitter
 ```{r}
 N <- nrow(twitterdf)
-sum(twitterdf$label==twitterdf$googleNLPclass)/N
+sum(twitterdf$label==twitterdf$NLPclass)/N
 sum(twitterdf$label==twitterdf$VADERclass)/N
-sum(twitterdf$label==twitterdf$Syuzhetclass)/N
+sum(twitterdf$label==twitterdf$SYUZHETclass)/N
 ```
 
 Then we can study the precision and recall of the positive and negative sentiment classes. Let's start with the precision of the positive class for Twitter:
 ```{r}
-TP <-  twitterdf$label=="Positive"
-sum(TP & twitterdf$googleNLPclass=="Positive")/sum(twitterdf$googleNLPclass=="Positive")
-sum(TP & twitterdf$VADERclass=="Positive")/sum(twitterdf$VADERclass=="Positive")
-sum(TP & twitterdf$Syuzhetclass=="Positive")/sum(twitterdf$Syuzhetclass=="Positive")
+TP_NLP <- sum(twitterdf$label == "Positive" & twitterdf$label == twitterdf$NLPclass);
+TP_VADER <- sum(twitterdf$label == "Positive" & twitterdf$label == twitterdf$VADERclass)
+TP_SYUZHET <- sum(twitterdf$label == "Positive" & twitterdf$label == twitterdf$SYUZHETclass)
+
+Precision_pos <- vector("double", 3)
+Precision_pos[1] <- TP_NLP / sum(twitterdf$NLPclass == "Positive") 
+Precision_pos[2] <- TP_VADER / sum(twitterdf$VADERclass == "Positive") 
+Precision_pos[3] <- TP_SYUZHET / sum(twitterdf$SYUZHETclass == "Positive") 
+
+print(Precision_pos)
 ```
 
 and the recall of the positive class for Twitter:
 ```{r}
-sum(TP & twitterdf$googleNLPclass=="Positive")/sum(TP)
-sum(TP & twitterdf$VADERclass=="Positive")/sum(TP)
-sum(TP & twitterdf$Syuzhetclass=="Positive")/sum(TP)
+Recall_pos <- vector("double", 3)
+Recall_pos[1] <- TP_NLP / sum(twitterdf$label == "Positive") 
+Recall_pos[2] <- TP_VADER / sum(twitterdf$label == "Positive") 
+Recall_pos[3] <- TP_SYUZHET / sum(twitterdf$label == "Positive") 
+
+print(Recall_pos)
 ```
 
 Let's compare to the negative class by computing also precision and recall:
 ```{r}
-#Your code here
+TN_NLP <- sum(twitterdf$label == "Negative" & twitterdf$label == twitterdf$NLPclass);
+TN_VADER <- sum(twitterdf$label == "Negative" & twitterdf$label == twitterdf$VADERclass)
+TN_SYUZHET <- sum(twitterdf$label == "Negative" & twitterdf$label == twitterdf$SYUZHETclass)
+
+Precision_neg <- vector("double", 3)
+Precision_neg[1] <- TN_NLP / sum(twitterdf$NLPclass == "Negative") 
+Precision_neg[2] <- TN_VADER / sum(twitterdf$VADERclass == "Negative") 
+Precision_neg[3] <- TN_SYUZHET / sum(twitterdf$SYUZHETclass == "Negative") 
+
+Recall_neg <- vector("double", 3)
+Recall_neg[1] <- TN_NLP / sum(twitterdf$label == "Negative")
+Recall_neg[2] <- TN_VADER / sum(twitterdf$label == "Negative")
+Recall_neg[3] <- TN_SYUZHET / sum(twitterdf$label == "Negative")
+
+print(Precision_neg)
+print(Recall_neg)
 ```
 
 **4.3 Evaluate on Youtube**
 
 First, let's calculate the accuracy for all three classifiers on youtube
 ```{r}
-#Your code here
+N <- nrow(youtubedf)
+
+Accuracy_yt <- vector("double", 3)
+Accuracy_yt[1] <- sum(youtubedf$NLPclass == youtubedf$label) / N
+Accuracy_yt[2] <- sum(youtubedf$VADERclass == youtubedf$label) / N
+Accuracy_yt[3] <- sum(youtubedf$SYUZHETclass == youtubedf$label) / N
+
+print(Accuracy_yt)
 ```
 
 Then we can study the precision and recall of the positive and negative sentiment classes. Let's start with the precision of the positive class for Youtube:
 ```{r}
-#Your code here
+TP_NLP_yt <- sum(youtubedf$label == "Positive" & youtubedf$label == youtubedf$NLPclass);
+TP_VADER_yt <- sum(youtubedf$label == "Positive" & youtubedf$label == youtubedf$VADERclass)
+TP_SYUZHET_yt <- sum(youtubedf$label == "Positive" & youtubedf$label == youtubedf$SYUZHETclass)
+
+Precision_pos_yt <- vector("double", 3)
+Precision_pos_yt[1] <- TP_NLP / sum(youtubedf$NLPclass == "Positive") 
+Precision_pos_yt[2] <- TP_VADER / sum(youtubedf$VADERclass == "Positive") 
+Precision_pos_yt[3] <- TP_SYUZHET / sum(youtubedf$SYUZHETclass == "Positive") 
+
+print(Precision_pos_yt)
 ```
 
 and the recall of the positive class for Youtube:
 ```{r}
-#Your code here
+Recall_pos_yt <- vector("double", 3)
+Recall_pos_yt[1] <- TP_NLP_yt / sum(youtubedf$label == "Positive") 
+Recall_pos_yt[2] <- TP_VADER_yt / sum(youtubedf$label == "Positive") 
+Recall_pos_yt[3] <- TP_SYUZHET_yt / sum(youtubedf$label == "Positive") 
+
+print(Recall_pos_yt)
 ```
 
 Let's compare to the negative class by computing also precision and recall:
 ```{r}
-#Your code here
+TN_NLP_yt <- sum(youtubedf$label == "Negative" & youtubedf$label == youtubedf$NLPclass);
+TN_VADER_yt <- sum(youtubedf$label == "Negative" & youtubedf$label == youtubedf$VADERclass)
+TN_SYUZHET_yt <- sum(youtubedf$label == "Negative" & youtubedf$label == youtubedf$SYUZHETclass)
+
+Precision_neg_yt <- vector("double", 3)
+Precision_neg_yt[1] <- TN_NLP_yt / sum(youtubedf$NLPclass == "Negative") 
+Precision_neg_yt[2] <- TN_VADER_yt / sum(youtubedf$VADERclass == "Negative") 
+Precision_neg_yt[3] <- TN_SYUZHET_yt / sum(youtubedf$SYUZHETclass == "Negative") 
+
+Recall_neg_yt <- vector("double", 3)
+Recall_neg_yt[1] <- TN_NLP_yt / sum(youtubedf$label == "Negative")
+Recall_neg_yt[2] <- TN_VADER_yt / sum(youtubedf$label == "Negative")
+Recall_neg_yt[3] <- TN_SYUZHET_yt / sum(youtubedf$label == "Negative")
+
+print(Precision_neg_yt)
+print(Recall_neg_yt)
 ```
 
 
 # 5. Conclusions
 
 1. What was the best performing method for Youtube? Did that fit your expectations?
+VADER and GoogleNLP have comparable accuracies, both higher than Syuzhet. However, VADER seems to have a ebtter F1 factor, especially for the positive class.
 
 2. What was the best performing method for Twitter? Did that fit your expectations?
+Again VADER and GoogleNLP both have higher accuracy than Syuzhet, and VADER has a better overall F1 factor.
 
 4. Do you observe any differences between prediction of positive and negative sentiment? What is the role of the imbalance between postive and negative classes in the calculation of accuracy?
+
+Prediction of positive classes have a lower Precision, but higher Recall. The opposite happens for the negative class predictions. This means that these models tend to be a bit more biased towards the positive classification. 
